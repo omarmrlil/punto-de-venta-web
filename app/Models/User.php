@@ -64,6 +64,11 @@ class User extends Authenticatable
         return $this->belongsTo(Empleado::class);
     }
 
+    public function activityLogs(): HasMany
+    {
+        return $this->hasMany(Activitylog::class);
+    }
+
 
 
 }
