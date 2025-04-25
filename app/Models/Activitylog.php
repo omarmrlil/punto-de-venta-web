@@ -7,14 +7,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Activitylog extends Model
 {
-    protected $fillable = ['user_id', 'action', 'module', 'data', 'ip_address'];
+protected $table = 'activity_logs'; // Asegúrate de que coincida con el nombre de la tabla
+
+    protected $fillable = [
+        'user_id',
+        'action',
+        'module',
+        'data',
+        'ip_address',
+    ];
 
     protected $casts = [
-        'data' => 'array',
+        'data' => 'array', // Convierte automáticamente el campo `data` a array
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
-}   
+}

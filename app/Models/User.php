@@ -1,74 +1,74 @@
 <?php
 
-namespace App\Models;
+    namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens;
-use Spatie\Permission\Traits\HasRoles;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+    // use Illuminate\Contracts\Auth\MustVerifyEmail;
+    use Illuminate\Database\Eloquent\Factories\HasFactory;
+    use Illuminate\Database\Eloquent\Relations\BelongsTo;
+    use Illuminate\Foundation\Auth\User as Authenticatable;
+    use Illuminate\Notifications\Notifiable;
+    use Laravel\Sanctum\HasApiTokens;
+    use Spatie\Permission\Traits\HasRoles;
+    use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class User extends Authenticatable
-{
-    use HasApiTokens, HasFactory, Notifiable, HasRoles;
-
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
-    protected $fillable = [
-        'name',
-        'email',
-        'password',
-        'estado',
-        'empleado_id',
-    ];
-
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
-
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
-
-    protected $casts = [
-        'email_verified_at' => 'datetime',
-    ];
-
-    public function ventas(): HasMany{
-        return $this->hasMany(Venta::class);
-    }
-
-    public function cajas(): HasMany{
-        return $this->hasMany(Caja::class);
-    }
-
-    public function compras(): HasMany{
-        return $this->hasMany(Compra::class);
-    }
-    public function empleado(): BelongsTo
+    class User extends Authenticatable
     {
-        return $this->belongsTo(Empleado::class);
+        use HasApiTokens, HasFactory, Notifiable, HasRoles;
+
+        /**
+         * The attributes that are mass assignable.
+         *
+         * @var array<int, string>
+         */
+        protected $fillable = [
+            'name',
+            'email',
+            'password',
+            'estado',
+            'empleado_id',
+        ];
+
+        /**
+         * The attributes that should be hidden for serialization.
+         *
+         * @var array<int, string>
+         */
+        protected $hidden = [
+            'password',
+            'remember_token',
+        ];
+
+        /**
+         * The attributes that should be cast.
+         *
+         * @var array<string, string>
+         */
+
+        protected $casts = [
+            'email_verified_at' => 'datetime',
+        ];
+
+        public function ventas(): HasMany{
+            return $this->hasMany(Venta::class);
+        }
+
+        public function cajas(): HasMany{
+            return $this->hasMany(Caja::class);
+        }
+
+        public function compras(): HasMany{
+            return $this->hasMany(Compra::class);
+        }
+        public function empleado(): BelongsTo
+        {
+            return $this->belongsTo(Empleado::class);
+        }
+
+        public function activityLogs(): HasMany
+        {
+            return $this->hasMany(Activitylog::class);
+        }
+
+
+
     }
-
-    public function activityLogs(): HasMany
-    {
-        return $this->hasMany(Activitylog::class);
-    }
-
-
-
-}

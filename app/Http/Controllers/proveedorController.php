@@ -8,11 +8,13 @@ use App\Http\Requests\UpdateProveedoreRequest;
 use App\Models\Documento;
 use App\Models\Persona;
 use App\Models\Proveedore;
+use App\Services\ActivityLogService;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class proveedorController extends Controller
 {
@@ -55,13 +57,15 @@ class proveedorController extends Controller
         $persona->proveedore()->create([]);
 
         DB::commit();
-    } catch (Exception $e) {
-        DB::rollBack();
-        Log::error('Error al guardar el proveedor:', ['error' => $e->getMessage()]);
-        return redirect()->route('proveedores.index')->with('error', 'Error al guardar el proveedor.');
-    }
-
+// Registrar la actividad
+        ActivityLogService::log('Proveedor creado', 'proveedores', $request->validated());
     return redirect()->route('proveedores.index')->with('success', 'Proveedor registrado');
+
+    } catch (Throwable $e) {
+        DB::rollBack();
+        Log::error('Error al crear el proveedor:', ['error' => $e->getMessage()]);
+        return redirect()->route('proveedores.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+    }
 }
     public function edit(Proveedore $proveedore): View
     {

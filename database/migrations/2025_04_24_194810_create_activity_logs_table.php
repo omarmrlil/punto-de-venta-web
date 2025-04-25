@@ -17,11 +17,14 @@ return new class extends Migration
             $table->string('action');
             $table->string('module')->nullable();
             $table->json('data')->nullable();
-            $table->ipAddress()->nullable();
+            $table->ipAddress('ip_address')->nullable();
             $table->timestamps();
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
         Schema::dropIfExists('activity_logs');
