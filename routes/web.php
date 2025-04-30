@@ -14,6 +14,7 @@ use App\Http\Controllers\proveedorController;
 use App\Http\Controllers\roleController;
 use App\Http\Controllers\userController;
 use App\Http\Controllers\ventaController;
+use App\Models\Activitylog;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -39,8 +40,10 @@ Route::resources([
     'ventas' => ventaController::class,
     'users' => userController::class,
     'roles' => roleController::class,
-    'profile' => profileController::class
+    'profile' => profileController::class,
+    'activitylog' => \App\Http\Controllers\ActivityLogController::class, // Corregido: Usar el controlador
 ]);
+
 
 Route::resource('Categorias', categoriaController::class)->except('show');
 

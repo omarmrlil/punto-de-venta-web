@@ -7,9 +7,10 @@ use App\Models\Cliente;
 use App\Models\Comprobante;
 use App\Models\Producto;
 use App\Models\Venta;
+use App\Services\ActivityLogService;
 use Exception;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -22,25 +23,25 @@ class ventaController extends Controller
         $this->middleware('permission:mostrar-venta', ['only' => ['show']]);
         $this->middleware('permission:eliminar-venta', ['only' => ['destroy']]);
     }
+
     /**
      * Display a listing of the resource.
      */
-    public function index(): view
+    public function index(): View
     {
-        $ventas = Venta::with(['comprobante','cliente.persona','user'])
-        ->where('estado',1)
-        ->latest()
-        ->get();
+        $ventas = Venta::with(['comprobante', 'cliente.persona', 'user'])
+            ->where('estado', 1)
+            ->latest()
+            ->get();
 
-        return view('venta.index',compact('ventas'));
+        return view('venta.index', compact('ventas'));
     }
 
     /**
      * Show the form for creating a new resource.
      */
-    public function create() : View
+    public function create(): View
     {
-
         $subquery = DB::table('compra_producto')
             ->select('producto_id', DB::raw('MAX(created_at) as max_created_at'))
             ->groupBy('producto_id');
@@ -69,26 +70,30 @@ class ventaController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreVentaRequest $request) : RedirectResponse
+    public function store(StoreVentaRequest $request): RedirectResponse
     {
-        try{
+        try {
             DB::beginTransaction();
 
-            //Llenar mi tabla venta
+            // Llenar mi tabla venta
             $venta = Venta::create($request->validated());
 
-            //Llenar mi tabla venta_producto
-            //1. Recuperar los arrays
+            // Filtrar datos relevantes para el registro de actividad
+            $logData = collect($request->validated())->only(['cliente_id', 'comprobante_id', 'total'])->toArray();
+
+            // Registrar la actividad
+            ActivityLogService::log('Venta creada', 'ventas', $logData);
+
+            // Llenar mi tabla venta_producto
             $arrayProducto_id = $request->get('arrayidproducto');
             $arrayCantidad = $request->get('arraycantidad');
             $arrayPrecioVenta = $request->get('arrayprecioventa');
             $arrayDescuento = $request->get('arraydescuento');
 
-            //2.Realizar el llenado
-            $siseArray = count($arrayProducto_id);
+            $sizeArray = count($arrayProducto_id);
             $cont = 0;
 
-            while($cont < $siseArray){
+            while ($cont < $sizeArray) {
                 $venta->productos()->syncWithoutDetaching([
                     $arrayProducto_id[$cont] => [
                         'cantidad' => $arrayCantidad[$cont],
@@ -97,62 +102,74 @@ class ventaController extends Controller
                     ]
                 ]);
 
-                //Actualizar stock
+                // Actualizar stock
                 $producto = Producto::find($arrayProducto_id[$cont]);
                 $stockActual = $producto->stock;
                 $cantidad = intval($arrayCantidad[$cont]);
 
                 DB::table('productos')
-                ->where('id',$producto->id)
-                ->update([
-                    'stock' => $stockActual - $cantidad
-                ]);
+                    ->where('id', $producto->id)
+                    ->update([
+                        'stock' => $stockActual - $cantidad
+                    ]);
 
                 $cont++;
             }
 
             DB::commit();
-        }catch(Exception $e){
-            DB::rollBack();
-        }
 
-        return redirect()->route('ventas.index')->with('success','Venta exitosa');
+            return redirect()->route('ventas.index')->with('success', 'Venta registrada');
+
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Error al crear la venta:', ['error' => $e->getMessage()]);
+            return redirect()->route('ventas.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+        }
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(Venta $venta) : view
+    public function show(Venta $venta): View
     {
-        return view('venta.show',compact('venta'));
-    }
+        // Registrar la actividad
+        ActivityLogService::log('Venta visualizada', 'ventas', [
+            'cliente_id' => $venta->cliente_id,
+            'comprobante_id' => $venta->comprobante_id,
+            'total' => $venta->total,
+        ]);
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
+        return view('venta.show', compact('venta'));
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id) : RedirectResponse
+    public function destroy(string $id): RedirectResponse
     {
-        Venta::where('id',$id)
-        ->update([
-            'estado' => 0
-        ]);
+        try {
+            DB::beginTransaction();
 
-        return redirect()->route('ventas.index')->with('success','Venta eliminada');
+            $venta = Venta::findOrFail($id);
+
+            // Eliminar lógicamente la venta
+            $venta->update(['estado' => 0]);
+
+            // Registrar la actividad
+            ActivityLogService::log('Venta eliminada', 'ventas', [
+                'cliente_id' => $venta->cliente_id,
+                'comprobante_id' => $venta->comprobante_id,
+                'total' => $venta->total,
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('ventas.index')->with('success', 'Venta eliminada');
+
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Error al eliminar la venta:', ['error' => $e->getMessage()]);
+            return redirect()->route('ventas.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+        }
     }
 }

@@ -26,12 +26,11 @@ class proveedorController extends Controller
         $this->middleware('permission:eliminar-proveedore', ['only' => ['destroy']]);
     }
 
-    public function index(): View
-    {
-        $proveedores = Proveedore::with(['persona.documento'])->get();
-        return view('proveedore.index', compact('proveedores'));
-    }
-
+ public function index(): View
+{
+    $proveedores = Proveedore::with(['persona.documento'])->latest()->get();
+    return view('proveedore.index', compact('proveedores'));
+}
     public function create(): View
     {
         $documentos = Documento::all();
@@ -78,33 +77,64 @@ class proveedorController extends Controller
     {
         try {
             DB::beginTransaction();
-            $proveedore->persona->update($request->validated());
-            DB::commit();
-        } catch (Exception $e) {
-            DB::rollBack();
-        }
 
-        return redirect()->route('proveedores.index')->with('success', 'Proveedor editado');
+            // Actualizar la persona asociada al proveedor
+            $proveedore->persona->update($request->validated());
+
+            // Filtrar datos relevantes para el registro de actividad
+            $logData = collect($request->validated())->only(['razon_social', 'direccion', 'telefono', 'tipo', 'email', 'documento_id', 'numero_documento'])->toArray();
+
+            // Registrar la actividad
+            ActivityLogService::log('Proveedor actualizado', 'proveedores', $logData);
+
+            DB::commit();
+
+            return redirect()->route('proveedores.index')->with('success', 'Proveedor editado');
+
+        } catch (Throwable $e) {
+            DB::rollBack();
+            Log::error('Error al actualizar el proveedor:', ['error' => $e->getMessage()]);
+            return redirect()->route('proveedores.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+        }
     }
 
     public function destroy(string $id): RedirectResponse
     {
-        $message = '';
-        $persona = Persona::find($id);
-        if ($persona->estado == 1) {
-            Persona::where('id', $persona->id)
-                ->update([
-                    'estado' => 0
-                ]);
-            $message = 'Proveedor eliminado';
-        } else {
-            Persona::where('id', $persona->id)
-                ->update([
-                    'estado' => 1
-                ]);
-            $message = 'Proveedor restaurado';
-        }
+        try {
+            DB::beginTransaction();
 
-        return redirect()->route('proveedores.index')->with('success', $message);
-    }
+            $persona = Persona::findOrFail($id);
+            $message = '';
+
+            if ($persona->estado == 1) {
+                $persona->update(['estado' => 0]);
+                $message = 'Proveedor eliminado';
+
+                // Registrar la actividad
+                ActivityLogService::log('Proveedor eliminado', 'proveedores', [
+                    'razon_social' => $persona->razon_social,
+                    'accion' => 'Eliminación lógica',
+                ]);
+            } else {
+                $persona->update(['estado' => 1]);
+                $message = 'Proveedor restaurado';
+
+                // Registrar la actividad
+                ActivityLogService::log('Proveedor restaurado', 'proveedores', [
+                    'razon_social' => $persona->razon_social,
+                    'accion' => 'Restauración lógica',
+                ]);
+            }
+
+            DB::commit();
+
+            return redirect()->route('proveedores.index')->with('success', $message);
+
+        } catch (Throwable $e) {
+            DB::rollBack();
+            Log::error('Error al eliminar/restaurar el proveedor:', ['error' => $e->getMessage()]);
+            return redirect()->route('proveedores.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+        }
 }
+}
+

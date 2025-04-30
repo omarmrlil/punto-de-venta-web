@@ -6,8 +6,11 @@ use App\Http\Requests\StoreCaracteristicaRequest;
 use App\Http\Requests\UpdatePresentacioneRequest;
 use App\Models\Caracteristica;
 use App\Models\Presentacione;
+use App\Services\ActivityLogService;
 use Exception;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -20,10 +23,11 @@ class presentacioneController extends Controller
         $this->middleware('permission:editar-presentacione', ['only' => ['edit', 'update']]);
         $this->middleware('permission:eliminar-presentacione', ['only' => ['destroy']]);
     }
+
     /**
      * Display a listing of the resource.
      */
-    public function index(): view
+    public function index(): View
     {
         $presentaciones = Presentacione::with('caracteristica')->latest()->get();
         return view('presentacione.index', compact('presentaciones'));
@@ -32,7 +36,7 @@ class presentacioneController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create(): view
+    public function create(): View
     {
         return view('presentacione.create');
     }
@@ -44,16 +48,30 @@ class presentacioneController extends Controller
     {
         try {
             DB::beginTransaction();
+
+            // Crear la característica
             $caracteristica = Caracteristica::create($request->validated());
-            $caracteristica->presentacione()->create([
-                'caracteristica_id' => $caracteristica->id
+
+            // Crear la presentación asociada
+            $presentacione = $caracteristica->presentacione()->create([
+                'caracteristica_id' => $caracteristica->id,
             ]);
+
+            // Filtrar datos relevantes para el registro de actividad
+            $logData = collect($request->validated())->only(['nombre', 'descripcion'])->toArray();
+
+            // Registrar la actividad
+            ActivityLogService::log('Presentación creada', 'presentaciones', $logData);
+
             DB::commit();
+
+            return redirect()->route('presentaciones.index')->with('success', 'Presentación registrada');
+
         } catch (Exception $e) {
             DB::rollBack();
+            Log::error('Error al crear la presentación:', ['error' => $e->getMessage()]);
+            return redirect()->route('presentaciones.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
         }
-
-        return redirect()->route('presentaciones.index')->with('success', 'Presentación registrada');
     }
 
     /**
@@ -67,9 +85,9 @@ class presentacioneController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Presentacione $presentacione): view
+    public function edit(Presentacione $presentacione): View
     {
-        return view('presentacione.edit',compact('presentacione'));
+        return view('presentacione.edit', compact('presentacione'));
     }
 
     /**
@@ -77,10 +95,27 @@ class presentacioneController extends Controller
      */
     public function update(UpdatePresentacioneRequest $request, Presentacione $presentacione): RedirectResponse
     {
-        Caracteristica::where('id', $presentacione->caracteristica->id)
-            ->update($request->validated());
+        try {
+            DB::beginTransaction();
 
-        return redirect()->route('presentaciones.index')->with('success', 'Presentación editada');
+            // Actualizar la característica asociada a la presentación
+            $presentacione->caracteristica->update($request->validated());
+
+            // Filtrar datos relevantes para el registro de actividad
+            $logData = collect($request->validated())->only(['nombre', 'descripcion'])->toArray();
+
+            // Registrar la actividad
+            ActivityLogService::log('Presentación actualizada', 'presentaciones', $logData);
+
+            DB::commit();
+
+            return redirect()->route('presentaciones.index')->with('success', 'Presentación editada');
+
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Error al actualizar la presentación:', ['error' => $e->getMessage()]);
+            return redirect()->route('presentaciones.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+        }
     }
 
     /**
@@ -88,22 +123,40 @@ class presentacioneController extends Controller
      */
     public function destroy(string $id): RedirectResponse
     {
-        $message = '';
-        $presentacione = Presentacione::find($id);
-        if ($presentacione->caracteristica->estado == 1) {
-            Caracteristica::where('id', $presentacione->caracteristica->id)
-                ->update([
-                    'estado' => 0
-                ]);
-            $message = 'Presentación eliminada';
-        } else {
-            Caracteristica::where('id', $presentacione->caracteristica->id)
-                ->update([
-                    'estado' => 1
-                ]);
-            $message = 'Presentación restaurada';
-        }
+        try {
+            DB::beginTransaction();
 
-        return redirect()->route('presentaciones.index')->with('success', $message);
+            $presentacione = Presentacione::findOrFail($id);
+            $message = '';
+
+            if ($presentacione->caracteristica->estado == 1) {
+                $presentacione->caracteristica->update(['estado' => 0]);
+                $message = 'Presentación eliminada';
+
+                // Registrar la actividad
+                ActivityLogService::log('Presentación eliminada', 'presentaciones', [
+                    'nombre' => $presentacione->caracteristica->nombre,
+                    'accion' => 'Eliminación lógica',
+                ]);
+            } else {
+                $presentacione->caracteristica->update(['estado' => 1]);
+                $message = 'Presentación restaurada';
+
+                // Registrar la actividad
+                ActivityLogService::log('Presentación restaurada', 'presentaciones', [
+                    'nombre' => $presentacione->caracteristica->nombre,
+                    'accion' => 'Restauración lógica',
+                ]);
+            }
+
+            DB::commit();
+
+            return redirect()->route('presentaciones.index')->with('success', $message);
+
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Error al eliminar/restaurar la presentación:', ['error' => $e->getMessage()]);
+            return redirect()->route('presentaciones.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+        }
     }
 }

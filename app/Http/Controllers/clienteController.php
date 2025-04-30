@@ -7,9 +7,10 @@ use App\Http\Requests\UpdateClienteRequest;
 use App\Models\Cliente;
 use App\Models\Documento;
 use App\Models\Persona;
+use App\Services\ActivityLogService;
 use Exception;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -22,19 +23,19 @@ class clienteController extends Controller
         $this->middleware('permission:editar-cliente', ['only' => ['edit', 'update']]);
         $this->middleware('permission:eliminar-cliente', ['only' => ['destroy']]);
     }
+
     /**
      * Display a listing of the resource.
-     */
-    public function index(): view
-    {
-        $clientes = Cliente::with('persona.documento')->get();
-        return view('cliente.index', compact('clientes'));
-    }
+     */public function index(): View
+{
+    $clientes = Cliente::with(['persona.documento'])->latest()->get();
+    return view('cliente.index', compact('clientes'));
+}
 
     /**
      * Show the form for creating a new resource.
      */
-    public function create() : View
+    public function create(): View
     {
         $documentos = Documento::all();
         return view('cliente.create', compact('documentos'));
@@ -47,16 +48,34 @@ class clienteController extends Controller
     {
         try {
             DB::beginTransaction();
+
+            // Crear la persona
             $persona = Persona::create($request->validated());
-            $persona->cliente()->create([
-                'persona_id' => $persona->id
+
+            // Crear el cliente asociado
+            $cliente = $persona->cliente()->create([
+                'persona_id' => $persona->id,
             ]);
+
+            // Filtrar datos relevantes para el registro de actividad
+            $logData = collect($request->validated())->only([
+                'razon_social', 'direccion', 'telefono', 'tipo', 'email', 'documento_id', 'numero_documento'
+            ])->toArray();
+
+            // Registrar la actividad
+            if (class_exists(ActivityLogService::class)) {
+                ActivityLogService::log('Cliente creado', 'clientes', $logData);
+            }
+
             DB::commit();
+
+            return redirect()->route('clientes.index')->with('success', 'Cliente registrado');
+
         } catch (Exception $e) {
             DB::rollBack();
+            Log::error('Error al crear el cliente:', ['error' => $e->getMessage()]);
+            return redirect()->route('clientes.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
         }
-
-        return redirect()->route('clientes.index')->with('success', 'Cliente registrado');
     }
 
     /**
@@ -80,20 +99,33 @@ class clienteController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateClienteRequest $request, Cliente $cliente) : RedirectResponse
+    public function update(UpdateClienteRequest $request, Cliente $cliente): RedirectResponse
     {
         try {
             DB::beginTransaction();
 
-            Persona::where('id', $cliente->persona->id)
-                ->update($request->validated());
+            // Actualizar la persona asociada al cliente
+            $cliente->persona->update($request->validated());
+
+            // Filtrar datos relevantes para el registro de actividad
+            $logData = collect($request->validated())->only([
+                'razon_social', 'direccion', 'telefono', 'tipo', 'email', 'documento_id', 'numero_documento'
+            ])->toArray();
+
+            // Registrar la actividad
+            if (class_exists(ActivityLogService::class)) {
+                ActivityLogService::log('Cliente actualizado', 'clientes', $logData);
+            }
 
             DB::commit();
+
+            return redirect()->route('clientes.index')->with('success', 'Cliente editado');
+
         } catch (Exception $e) {
             DB::rollBack();
+            Log::error('Error al actualizar el cliente:', ['error' => $e->getMessage()]);
+            return redirect()->route('clientes.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
         }
-
-        return redirect()->route('clientes.index')->with('success', 'Cliente editado');
     }
 
     /**
@@ -101,22 +133,44 @@ class clienteController extends Controller
      */
     public function destroy(string $id): RedirectResponse
     {
-        $message = '';
-        $persona = Persona::find($id);
-        if ($persona->estado == 1) {
-            Persona::where('id', $persona->id)
-                ->update([
-                    'estado' => 0
-                ]);
-            $message = 'Cliente eliminado';
-        } else {
-            Persona::where('id', $persona->id)
-                ->update([
-                    'estado' => 1
-                ]);
-            $message = 'Cliente restaurado';
-        }
+        try {
+            DB::beginTransaction();
 
-        return redirect()->route('clientes.index')->with('success', $message);
+            $persona = Persona::findOrFail($id);
+            $message = '';
+
+            if ($persona->estado == 1) {
+                $persona->update(['estado' => 0]);
+                $message = 'Cliente eliminado';
+
+                // Registrar la actividad
+                if (class_exists(ActivityLogService::class)) {
+                    ActivityLogService::log('Cliente eliminado', 'clientes', [
+                        'razon_social' => $persona->razon_social,
+                        'accion' => 'Eliminación lógica',
+                    ]);
+                }
+            } else {
+                $persona->update(['estado' => 1]);
+                $message = 'Cliente restaurado';
+
+                // Registrar la actividad
+                if (class_exists(ActivityLogService::class)) {
+                    ActivityLogService::log('Cliente restaurado', 'clientes', [
+                        'razon_social' => $persona->razon_social,
+                        'accion' => 'Restauración lógica',
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            return redirect()->route('clientes.index')->with('success', $message);
+
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Error al eliminar/restaurar el cliente:', ['error' => $e->getMessage()]);
+            return redirect()->route('clientes.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+        }
     }
 }

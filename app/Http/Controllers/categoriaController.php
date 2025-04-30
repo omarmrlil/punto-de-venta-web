@@ -6,14 +6,16 @@ use App\Http\Requests\StoreCaracteristicaRequest;
 use App\Http\Requests\UpdateCategoriaRequest;
 use App\Models\Caracteristica;
 use App\Models\Categoria;
+use App\Services\ActivityLogService;
 use Exception;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Collection;
 
 class categoriaController extends Controller
 {
-
     function __construct()
     {
         $this->middleware('permission:ver-categoria|crear-categoria|editar-categoria|eliminar-categoria', ['only' => ['index']]);
@@ -25,10 +27,9 @@ class categoriaController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): view
+    public function index(): View
     {
         $categorias = Categoria::with('caracteristica')->latest()->get();
-
         return view('categoria.index', ['categorias' => $categorias]);
     }
 
@@ -43,20 +44,34 @@ class categoriaController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreCaracteristicaRequest $request) : RedirectResponse
+    public function store(StoreCaracteristicaRequest $request): RedirectResponse
     {
         try {
             DB::beginTransaction();
+
+            // Crear la característica
             $caracteristica = Caracteristica::create($request->validated());
-            $caracteristica->categoria()->create([
-                'caracteristica_id' => $caracteristica->id
+
+            // Crear la categoría asociada
+            $categoria = $caracteristica->categoria()->create([
+                'caracteristica_id' => $caracteristica->id,
             ]);
+
+            // Filtrar datos relevantes para el registro de actividad
+            $logData = collect($request->validated())->only(['nombre', 'descripcion'])->toArray();
+
+            // Registrar la actividad
+            ActivityLogService::log('Categoría creada', 'categorias', $logData);
+
             DB::commit();
+
+            return redirect()->route('categorias.index')->with('success', 'Categoría registrada');
+
         } catch (Exception $e) {
             DB::rollBack();
+            Log::error('Error al crear la categoría:', ['error' => $e->getMessage()]);
+            return redirect()->route('categorias.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
         }
-
-        return redirect()->route('categorias.index')->with('success', 'Categoría registrada');
     }
 
     /**
@@ -80,33 +95,68 @@ class categoriaController extends Controller
      */
     public function update(UpdateCategoriaRequest $request, Categoria $categoria): RedirectResponse
     {
-        Caracteristica::where('id', $categoria->caracteristica->id)
-            ->update($request->validated());
+        try {
+            DB::beginTransaction();
 
-        return redirect()->route('categorias.index')->with('success', 'Categoría editada');
+            // Actualizar la característica asociada
+            $categoria->caracteristica->update($request->validated());
+
+            // Filtrar datos relevantes para el registro de actividad
+            $logData = collect($request->validated())->only(['nombre', 'descripcion'])->toArray();
+
+            // Registrar la actividad
+            ActivityLogService::log('Categoría actualizada', 'categorias', $logData);
+
+            DB::commit();
+
+            return redirect()->route('categorias.index')->with('success', 'Categoría editada');
+
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Error al actualizar la categoría:', ['error' => $e->getMessage()]);
+            return redirect()->route('categorias.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+        }
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id) : RedirectResponse
+    public function destroy(string $id): RedirectResponse
     {
-        $message = '';
-        $categoria = Categoria::find($id);
-        if ($categoria->caracteristica->estado == 1) {
-            Caracteristica::where('id', $categoria->caracteristica->id)
-                ->update([
-                    'estado' => 0
-                ]);
-            $message = 'Categoría eliminada';
-        } else {
-            Caracteristica::where('id', $categoria->caracteristica->id)
-                ->update([
-                    'estado' => 1
-                ]);
-            $message = 'Categoría restaurada';
-        }
+        try {
+            DB::beginTransaction();
 
-        return redirect()->route('categorias.index')->with('success', $message);
+            $categoria = Categoria::findOrFail($id);
+            $message = '';
+
+            if ($categoria->caracteristica->estado == 1) {
+                $categoria->caracteristica->update(['estado' => 0]);
+                $message = 'Categoría eliminada';
+
+                // Registrar la actividad
+                ActivityLogService::log('Categoría eliminada', 'categorias', [
+                    'nombre' => $categoria->caracteristica->nombre,
+                    'accion' => 'Eliminación lógica',
+                ]);
+            } else {
+                $categoria->caracteristica->update(['estado' => 1]);
+                $message = 'Categoría restaurada';
+
+                // Registrar la actividad
+                ActivityLogService::log('Categoría restaurada', 'categorias', [
+                    'nombre' => $categoria->caracteristica->nombre,
+                    'accion' => 'Restauración lógica',
+                ]);
+            }
+
+            DB::commit();
+
+            return redirect()->route('categorias.index')->with('success', $message);
+
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Error al eliminar/restaurar la categoría:', ['error' => $e->getMessage()]);
+            return redirect()->route('categorias.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+        }
     }
 }

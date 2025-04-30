@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use App\Services\ActivityLogService;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -19,10 +21,11 @@ class roleController extends Controller
         $this->middleware('permission:editar-role', ['only' => ['edit', 'update']]);
         $this->middleware('permission:eliminar-role', ['only' => ['destroy']]);
     }
+
     /**
      * Display a listing of the resource.
      */
-    public function index():    view
+    public function index(): View
     {
         $roles = Role::all();
         return view('role.index', compact('roles'));
@@ -49,19 +52,32 @@ class roleController extends Controller
 
         try {
             DB::beginTransaction();
-            //Crear rol
+
+            // Crear rol
             $rol = Role::create(['name' => $request->name]);
 
-            //Asignar permisos
-            $rol->syncPermissions(array_map(fn($value) => (int)$value, $request->permission));
+            // Asignar permisos
+            $permisosAsignados = array_map(fn($value) => (int)$value, $request->permission);
+            $rol->syncPermissions($permisosAsignados);
+
+            // Filtrar datos relevantes para el registro de actividad
+            $logData = [
+                'nombre_rol' => $request->name,
+                'permisos_asignados' => $permisosAsignados,
+            ];
+
+            // Registrar la actividad
+            ActivityLogService::log('Rol creado', 'roles', $logData);
 
             DB::commit();
+
+            return redirect()->route('roles.index')->with('success', 'Rol registrado');
+
         } catch (Exception $e) {
             DB::rollBack();
+            Log::error('Error al crear el rol:', ['error' => $e->getMessage()]);
+            return redirect()->route('roles.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
         }
-
-
-        return redirect()->route('roles.index')->with('success', 'Rol registrado');
     }
 
     /**
@@ -84,7 +100,7 @@ class roleController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Role $role) : RedirectResponse
+    public function update(Request $request, Role $role): RedirectResponse
     {
         $request->validate([
             'name' => 'required|unique:roles,name,' . $role->id,
@@ -94,22 +110,31 @@ class roleController extends Controller
         try {
             DB::beginTransaction();
 
-            //Actualizar rol
-            Role::where('id', $role->id)
-                ->update([
-                    'name' => $request->name
-                ]);
+            // Actualizar rol
+            $role->update(['name' => $request->name]);
 
-            //Actualizar permisos
-            $role->syncPermissions(array_map(fn($value) => (int)$value, $request->permission));
+            // Actualizar permisos
+            $permisosAsignados = array_map(fn($value) => (int)$value, $request->permission);
+            $role->syncPermissions($permisosAsignados);
+
+            // Filtrar datos relevantes para el registro de actividad
+            $logData = [
+                'nombre_rol' => $request->name,
+                'permisos_asignados' => $permisosAsignados,
+            ];
+
+            // Registrar la actividad
+            ActivityLogService::log('Rol actualizado', 'roles', $logData);
 
             DB::commit();
-        } catch (Exception $e) {
-            dd($e);
-            DB::rollBack();
-        }
 
-        return redirect()->route('roles.index')->with('success', 'rol editado');
+            return redirect()->route('roles.index')->with('success', 'Rol editado');
+
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Error al actualizar el rol:', ['error' => $e->getMessage()]);
+            return redirect()->route('roles.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+        }
     }
 
     /**
@@ -117,10 +142,27 @@ class roleController extends Controller
      */
     public function destroy(string $id): RedirectResponse
     {
-        Role::where('id', $id)->delete();
+        try {
+            DB::beginTransaction();
 
+            $role = Role::findOrFail($id);
 
+            // Eliminar el rol
+            $role->delete();
 
-        return redirect()->route('roles.index')->with('success', 'rol eliminado');
+            // Registrar la actividad
+            ActivityLogService::log('Rol eliminado', 'roles', [
+                'nombre_rol' => $role->name,
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('roles.index')->with('success', 'Rol eliminado');
+
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Error al eliminar el rol:', ['error' => $e->getMessage()]);
+            return redirect()->route('roles.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+        }
     }
 }

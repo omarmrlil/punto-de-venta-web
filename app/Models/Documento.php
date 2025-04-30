@@ -13,4 +13,8 @@ class Documento extends Model
     public function persona() : HasMany{
         return $this->hasMany(Persona::class);
     }
+    public function personas()
+    {
+        return $this->hasMany(Persona::class);
+    }
 }
