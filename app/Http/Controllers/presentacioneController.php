@@ -10,7 +10,6 @@ use App\Services\ActivityLogService;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Collection;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -53,33 +52,19 @@ class presentacioneController extends Controller
             $caracteristica = Caracteristica::create($request->validated());
 
             // Crear la presentación asociada
-            $presentacione = $caracteristica->presentacione()->create([
-                'caracteristica_id' => $caracteristica->id,
-            ]);
-
-            // Filtrar datos relevantes para el registro de actividad
-            $logData = collect($request->validated())->only(['nombre', 'descripcion'])->toArray();
-
-            // Registrar la actividad
-            ActivityLogService::log('Presentación creada', 'presentaciones', $logData);
+            $caracteristica->presentacione()->create(['sigla' => $request->sigla]);
 
             DB::commit();
+
+            ActivityLogService::log('Creación de presentación', 'Presentaciones', $request->validated());
 
             return redirect()->route('presentaciones.index')->with('success', 'Presentación registrada');
 
         } catch (Exception $e) {
             DB::rollBack();
             Log::error('Error al crear la presentación:', ['error' => $e->getMessage()]);
-            return redirect()->route('presentaciones.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+            return redirect()->route('presentaciones.index')->with('error', 'Ups, algo salió mal.');
         }
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
     }
 
     /**
@@ -87,6 +72,8 @@ class presentacioneController extends Controller
      */
     public function edit(Presentacione $presentacione): View
     {
+        // Cargar la relación con característica
+        $presentacione->load('caracteristica');
         return view('presentacione.edit', compact('presentacione'));
     }
 
@@ -98,11 +85,17 @@ class presentacioneController extends Controller
         try {
             DB::beginTransaction();
 
-            // Actualizar la característica asociada a la presentación
-            $presentacione->caracteristica->update($request->validated());
+            // Actualizar la característica asociada
+            $presentacione->caracteristica->update([
+                'nombre' => $request->nombre,
+                'descripcion' => $request->descripcion,
+            ]);
+
+            // Actualizar la presentación
+            $presentacione->update(['sigla' => $request->sigla]);
 
             // Filtrar datos relevantes para el registro de actividad
-            $logData = collect($request->validated())->only(['nombre', 'descripcion'])->toArray();
+            $logData = collect($request->all())->only(['nombre', 'descripcion', 'sigla'])->toArray();
 
             // Registrar la actividad
             ActivityLogService::log('Presentación actualizada', 'presentaciones', $logData);
@@ -114,7 +107,7 @@ class presentacioneController extends Controller
         } catch (Exception $e) {
             DB::rollBack();
             Log::error('Error al actualizar la presentación:', ['error' => $e->getMessage()]);
-            return redirect()->route('presentaciones.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+            return redirect()->route('presentaciones.index')->with('error', 'Ups, algo salió mal.');
         }
     }
 
@@ -156,7 +149,7 @@ class presentacioneController extends Controller
         } catch (Exception $e) {
             DB::rollBack();
             Log::error('Error al eliminar/restaurar la presentación:', ['error' => $e->getMessage()]);
-            return redirect()->route('presentaciones.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+            return redirect()->route('presentaciones.index')->with('error', 'Ups, algo salió mal.');
         }
     }
 }

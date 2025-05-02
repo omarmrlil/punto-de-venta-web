@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
+use App\Enums\TipoPersonaEnum;
 
 class clienteController extends Controller
 {
@@ -38,46 +39,47 @@ class clienteController extends Controller
     public function create(): View
     {
         $documentos = Documento::all();
-        return view('cliente.create', compact('documentos'));
+        $optionsTipopersona = TipoPersonaEnum::cases();
+        return view('Cliente.create', compact('documentos', 'optionsTipopersona'));
     }
+
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StorePersonaRequest $request): RedirectResponse
-    {
-        try {
-            DB::beginTransaction();
+   public function store(StorePersonaRequest $request): RedirectResponse
+{
+    try {
+        DB::beginTransaction();
 
-            // Crear la persona
-            $persona = Persona::create($request->validated());
+        // Crear la persona
+        $persona = Persona::create($request->validated());
 
-            // Crear el cliente asociado
-            $cliente = $persona->cliente()->create([
-                'persona_id' => $persona->id,
-            ]);
+        // Crear el cliente asociado
+        $cliente = $persona->cliente()->create([
+            'persona_id' => $persona->id,
+        ]);
 
-            // Filtrar datos relevantes para el registro de actividad
-            $logData = collect($request->validated())->only([
-                'razon_social', 'direccion', 'telefono', 'tipo', 'email', 'documento_id', 'numero_documento'
-            ])->toArray();
+        // Filtrar datos relevantes para el registro de actividad
+        $logData = collect($request->validated())->only([
+            'razon_social', 'direccion', 'telefono', 'tipo', 'email', 'documento_id', 'numero_documento'
+        ])->toArray();
 
-            // Registrar la actividad
-            if (class_exists(ActivityLogService::class)) {
-                ActivityLogService::log('Cliente creado', 'clientes', $logData);
-            }
-
-            DB::commit();
-
-            return redirect()->route('clientes.index')->with('success', 'Cliente registrado');
-
-        } catch (Exception $e) {
-            DB::rollBack();
-            Log::error('Error al crear el cliente:', ['error' => $e->getMessage()]);
-            return redirect()->route('clientes.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+        // Registrar la actividad
+        if (class_exists(ActivityLogService::class)) {
+            ActivityLogService::log('Cliente creado', 'clientes', $logData);
         }
-    }
 
+        DB::commit();
+
+        return redirect()->route('clientes.index')->with('success', 'Cliente registrado');
+
+    } catch (Exception $e) {
+        DB::rollBack();
+        Log::error('Error al crear el cliente:', ['error' => $e->getMessage()]);
+        return redirect()->route('clientes.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+    }
+}
     /**
      * Display the specified resource.
      */
@@ -119,12 +121,12 @@ class clienteController extends Controller
 
             DB::commit();
 
-            return redirect()->route('clientes.index')->with('success', 'Cliente editado');
+            return redirect()->route('cliente.index')->with('success', 'Cliente editado');
 
         } catch (Exception $e) {
             DB::rollBack();
             Log::error('Error al actualizar el cliente:', ['error' => $e->getMessage()]);
-            return redirect()->route('clientes.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
+            return redirect()->route('cliente.index')->with('error', 'Ups, algo salió mal. Por favor, inténtalo de nuevo.');
         }
     }
 
