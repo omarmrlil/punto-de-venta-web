@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Categoria extends Model
 {
@@ -14,12 +13,13 @@ class Categoria extends Model
 
     protected $fillable = ['caracteristica_id'];
 
-    public function productos(): HasMany {
-        return $this->hasMany(Producto::class)->withTimestamps();
+    public function productos(): BelongsToMany
+    {
+        return $this->belongsToMany(Producto::class)->withTimestamps();
     }
 
-    public function caracteristica(): BelongsTo {
+    public function caracteristica(): BelongsTo
+    {
         return $this->belongsTo(Caracteristica::class);
     }
-
 }

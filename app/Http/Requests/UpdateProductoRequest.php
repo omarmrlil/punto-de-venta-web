@@ -24,13 +24,13 @@ class UpdateProductoRequest extends FormRequest
         $producto = $this->route('producto');
         return [
             'codigo' => 'required|unique:productos,codigo,'.$producto->id.'|max:50',
-            'nombre' => 'required|unique:productos,nombre,'.$producto->id.'|max:80',
+            'nombre' => 'required|unique:productos,nombre,'.$producto->id.'|max:255',
             'descripcion' => 'nullable|max:255',
-            'fecha_vencimiento' => 'nullable|date',
+
             'img_path' => 'nullable|image|mimes:png,jpg,jpeg|max:2048',
-            'marca_id' => 'required|integer|exists:marcas,id',
+            'marca_id' => 'nullable|integer|exists:marcas,id',
             'presentacione_id' => 'required|integer|exists:presentaciones,id',
-            'categorias' => 'required'
+            'categorias' => 'nullable|integer|exists:categorias,id',
         ];
     }
 

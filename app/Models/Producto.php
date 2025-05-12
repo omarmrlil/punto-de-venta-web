@@ -10,16 +10,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-
 class Producto extends Model
 {
     use HasFactory;
-protected $guarded = ['id'];
+
+    protected $guarded = ['id'];
 
     public function kardex(): HasMany
     {
         return $this->hasMany(Kardex::class);
     }
+
     public function inventarios(): HasOne
     {
         return $this->hasOne(Inventario::class);
@@ -27,19 +28,21 @@ protected $guarded = ['id'];
 
     public function compras(): BelongsToMany
     {
-        return $this->belongsToMany(Compra::class)->withTimestamps()
+        return $this->belongsToMany(Compra::class)
+            ->withTimestamps()
             ->withPivot('cantidad', 'precio_compra', 'fecha_vencimiento');
     }
 
-    public function ventas(): BelongsTo
+    public function ventas(): BelongsToMany
     {
-        return $this->belongsTo(Venta::class)->withTimestamps()
+        return $this->belongsToMany(Venta::class)
+            ->withTimestamps()
             ->withPivot('cantidad', 'precio_venta');
     }
 
-    public function categorias(): BelongsToMany
+    public function categoria(): BelongsTo
     {
-        return $this->belongsToMany(Categoria::class)->withTimestamps();
+        return $this->belongsTo(Categoria::class);
     }
 
     public function marca(): BelongsTo
@@ -52,13 +55,22 @@ protected $guarded = ['id'];
         return $this->belongsTo(Presentacione::class);
     }
 
-    public function handleUploadImage($image): string
+    protected static function booted()
     {
-        $file = $image;
-        $name = time() . $file->getClientOriginalName();
-        //$file->move(public_path() . '/img/productos/', $name);
-        Storage::putFileAs('/public/productos/',$file,$name,'public');
-
-        return $name;
+        static::creating(function ($producto) {
+            if (empty($producto->codigo)) {
+                $producto->codigo = self::generateUniqueCode();
+            }
+        });
     }
+
+    private static function generateUniqueCode(): string
+    {
+        do {
+            $code = str_pad(random_int(0, 999999999), 10, '0', STR_PAD_LEFT);
+        } while (self::where('codigo', $code)->exists());
+
+        return $code;
+    }
+
 }
