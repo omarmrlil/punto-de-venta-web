@@ -15,6 +15,8 @@ use App\Http\Controllers\roleController;
 use App\Http\Controllers\userController;
 use App\Http\Controllers\ventaController;
 use App\Models\Activitylog;
+use App\Http\Controllers\InventarioController;
+use App\Http\Controllers\ActivityLogController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -41,7 +43,8 @@ Route::resources([
     'users' => userController::class,
     'roles' => roleController::class,
     'profile' => profileController::class,
-    'activitylog' => \App\Http\Controllers\ActivityLogController::class, // Corregido: Usar el controlador
+    'inventario' =>InventarioController::class,
+    'activitylog' => \App\Http\Controllers\ActivityLogController::class // Corregido: Usar el controlador
 ]);
 
 

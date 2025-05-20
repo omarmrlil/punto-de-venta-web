@@ -85,11 +85,14 @@
                                             <div class="vr"></div>
                                         </div>
                                         <div>
-                                            <!------Eliminar o  Restaurar producto---->
-                                            <button title="Restaurar" data-bs-toggle="modal" data-bs-target="#confirmModal-{{$item->id}}" class="btn btn-datatable btn-icon btn-transparent-dark">
+                                            <!------Inicializar  producto---->
+                                            <Form action="{{route('inventario.create')}}" method="get">
+                                                <input type="hidden" name="producto_id" value="{{$item->id}}">
+                                            <button title="Inicializar"
+                                                class="btn btn-datatable btn-icon btn-transparent-dark">
                                                 <i class="fa-solid fa-rotate"></i>
                                             </button>
-
+                                        </Form>
                                         </div>
                                     </div>
                                 </td>

@@ -68,6 +68,15 @@
                     </a>
                 @endcan
 
+                <!-- Módulo de Inventario -->
+
+                    <a class="nav-link" href="{{ route('inventario.index') }}">
+                        <div class="sb-nav-link-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+                        Inventario
+                    </a>
+
+
+
                 <!-- Módulo de Clientes -->
                 @can('ver-cliente')
                     <a class="nav-link" href="{{ route('clientes.index') }}">
