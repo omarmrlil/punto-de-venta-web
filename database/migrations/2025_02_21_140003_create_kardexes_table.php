@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('kardex', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('product_id')->constrained('productos')->cascadeOnDelete();
+            $table->foreignId('producto_id')->constrained('productos')->cascadeOnDelete();
             $table->enum('tipo_transaccion', ['Compra', 'Venta', 'Ajuste', 'Apertura']);
             $table->string('descripcion_transaccion');
             $table->integer('entrada') ->nullable();
